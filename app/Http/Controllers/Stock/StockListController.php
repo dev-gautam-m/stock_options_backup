@@ -7,9 +7,15 @@ use App\Models\Stock\StockList;
 use Illuminate\Http\Request;
 
 class StockListController extends Controller
-{
+{     
+
     public function index()
     {
+    
+        if(!$this->checkTime()) {
+            exit;
+        } 
+
         $indexesArray = [
             'nifty' => 'NIFTY',
             'nifty-bank' => 'BANKNIFTY',
@@ -35,10 +41,10 @@ class StockListController extends Controller
         try {
             StockList::insert($dataToInsert);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to insert data: '], 500);
+            // return response()->json(['error' => 'Data already inserted '], 500);
         }
 
-        return response()->json(['message' => 'Data successfully inserted'], 200);
+        // return response()->json(['message' => 'Data successfully inserted'], 200);
     }
 
 }

@@ -18,34 +18,40 @@ class OptionsBackupController extends Controller
         'nifty-financial-services' => 'FINNIFTY',
         'sp-bse-bankex' => 'BANKEX',
         'india-vix' => 'INDIAVIX'
-    ];
+    ];  
 
     public function index()
     {
-        $sl = StockList::where('is_processed', false)->first();
+        if(!$this->checkTime()) {
+            exit;
+        }
+        $res = StockList::where('is_processed', false)->get();
 
-        if (!$sl) {
-            return response()->json(['error' => 'No more data to process.'], 500);
+        if ($res->isEmpty()) {
+            exit;
         }
 
-        $response = $this->fetchStockData($sl->name);
+        foreach($res as $sl) {
+            $response = $this->fetchStockData($sl->name);
+ 
 
-        if (!$response->successful()) {
-            return response()->json(['error' => 'Failed to fetch data'], 500);
+            if (!$response->successful()) {
+                return response()->json(['error' => 'Failed to fetch datatyjy'], 500);
+            }
+
+            $dataToInsert = $this->prepareDataToInsert($response->json(), $sl);
+
+            try {
+                OptionsBackup::insert($dataToInsert);
+            } catch (\Exception $e) { 
+                return response()->json(['error' => 'Failed to insert datawe2'], 500);
+            }
+
+            $sl->is_processed = true;
+            $sl->save();
         }
 
-        $dataToInsert = $this->prepareDataToInsert($response->json(), $sl);
-
-        try {
-            OptionsBackup::insert($dataToInsert);
-        } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to insert data'], 500);
-        }
-
-        $sl->is_processed = true;
-        $sl->save();
-
-        return response()->json(['message' => 'Data successfully inserted'], 200);
+        // return response()->json(['message' => 'Data successfully inserted'], 200);
     }
 
     protected function fetchStockData($name)
@@ -97,41 +103,46 @@ class OptionsBackupController extends Controller
 
     public function getsingleStrickChart() 
     {
-        $sl = OptionsBackup::where('is_processed', false)->first();
+        $res = OptionsBackup::where('is_processed', false)
+                            ->limit(5)
+                            ->get();
 
-        if (!$sl) {
-            return response()->json(['error' => 'No more data to process.'], 500);
+        if ($res->isEmpty()) {
+            echo 'no data';
+            exit;
         }
 
-        $dateObject = Carbon::createFromFormat('Y-m-d', $sl->currentExpiry);
-        $date = $dateObject->format('y') . $dateObject->format('n') . $dateObject->format('j');
-        $modifiedPrice = substr($sl->strike_price, 0, -2);
+        foreach($res as $sl) {
 
-        $exchange = 'NSE';
-        if(in_array($sl->indexName, ['BANKEX', 'SENSEX']))
-        {
-            $exchange = 'BSE';
-        }
+            $dateObject = Carbon::createFromFormat('Y-m-d', $sl->currentExpiry);
+            $date = $dateObject->format('y') . $dateObject->format('n') . $dateObject->format('j');
+            $modifiedPrice = substr($sl->strike_price, 0, -2);
 
-        foreach ($this->getOptionTypes() as $type => $suffix) {
-            
-            $url = "https://groww.in/v1/api/stocks_fo_data/v1/charting_service/chart/exchange/{$exchange}/segment/FNO/{$sl->indexName}{$date}{$modifiedPrice}{$suffix}/daily?intervalInMinutes=1";
-
-            // echo $url;exit;
-
-            echo '<title>' . $sl->indexName . ': ' . $modifiedPrice.'</title>'.$sl->indexName.': '.$modifiedPrice. "<br>";
-
-            $response = Http::get($url);
-
-            if ($response->successful()) {
-                $sl->$type = json_encode($response->json()['candles']);
+            $exchange = 'NSE';
+            if(in_array($sl->indexName, ['BANKEX', 'SENSEX']))
+            {
+                $exchange = 'BSE';
             }
+
+            foreach ($this->getOptionTypes() as $type => $suffix) {
+                
+                $url = "https://groww.in/v1/api/stocks_fo_data/v1/charting_service/chart/exchange/{$exchange}/segment/FNO/{$sl->indexName}{$date}{$modifiedPrice}{$suffix}/daily?intervalInMinutes=1";
+
+                echo '<title>' . $sl->indexName . ': ' . $modifiedPrice.'</title>'.$sl->indexName.': '.$modifiedPrice. "<br>";
+
+                $response = Http::get($url);
+
+                if ($response->successful()) {
+                    $sl->$type = json_encode($response->json()['candles']);
+                }
+            }
+
+            $sl->is_processed = true;
+            $sl->save();
         }
 
-        $sl->is_processed = true;
-        $sl->save();
+        header("Refresh:1;");
 
-        header("Refresh:1"); 
     }
 
     protected function getOptionTypes()

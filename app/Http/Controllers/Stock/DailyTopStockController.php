@@ -6,10 +6,29 @@ use App\Http\Controllers\Controller;
 use App\Models\Stock\DailyTopStock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Carbon\Carbon;
+
 
 class DailyTopStockController extends Controller
 {
-    public function index() {
+
+    public function checkTimex()
+    {
+        $current_time = Carbon::now();
+        $start_time = Carbon::createFromTime(9, 15, 0);
+        $end_time = Carbon::createFromTime(15, 30, 0); 
+        if ($current_time->between($start_time, $end_time)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public function index() { 
+
+        if(!$this->checkTimex()) {
+            exit;
+        } 
 
         $indexes = [
             'GIDXNIFTY100',
@@ -30,7 +49,7 @@ class DailyTopStockController extends Controller
 
             foreach($types as $type) {
                 $url = "https://groww.in/v1/api/stocks_data/explore/v2/indices/{$index}/market_trends?discovery_filter_types={$type}&size=5";
-
+                
                 $response = Http::get($url);
 
                 if (!$response->successful()) {
@@ -45,7 +64,6 @@ class DailyTopStockController extends Controller
                 }
 
                 $res[$index] = $d;
-
                 
             }  
  
@@ -66,8 +84,10 @@ class DailyTopStockController extends Controller
 
         try {
             DailyTopStock::insert($dataToInsert);
+            echo 'Done';
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to insert data'], 500);
+            echo 'Error';
         }
     }
 
